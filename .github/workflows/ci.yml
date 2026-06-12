@@ -7,6 +7,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: true
+
 env:
   PYTHON_VERSION: "3.10"
   USE_UPX: false
@@ -25,6 +29,13 @@ jobs:
         with:
           python-version: ${{env.PYTHON_VERSION}}
 
+      - name: Install test dependencies
+        run: |
+          sudo apt update
+          sudo apt install libgirepository1.0-dev gir1.2-ayatanaappindicator3-0.1 libayatana-appindicator3-1 python3-tk
+          python3 -m pip install wheel
+          python3 -m pip install -r requirements.txt
+
       - name: Validate language files
         run: |
           failed=()
@@ -41,8 +52,12 @@ jobs:
             exit 1
           fi
 
+      - name: Run tests
+        run: python3 -m unittest discover -s tests -v
+
   windows:
     name: Windows
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     needs:
       - validate
@@ -108,6 +123,7 @@ jobs:
 
   macos:
     name: macOS (arm64)
+    if: github.event_name != 'pull_request'
     runs-on: macos-15
     needs:
       - validate
@@ -174,6 +190,7 @@ jobs:
 
   linux-appimage:
     name: Linux (AppImage) (${{matrix.arch}})
+    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
