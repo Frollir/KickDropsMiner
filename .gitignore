@@ -7,12 +7,15 @@ __pycache__
 /*.exe
 /*.zip
 /*.tmp
-/Twitch Drops Miner
+/Kick Drops Miner
 # Dev files
 *.new
 /env
 /cache
+/logs
 /*.jar
+/cookies.txt
+/kickautodrops-main/
 log.txt
 /dump.dat
 /lock.file

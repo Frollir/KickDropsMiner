@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import re
 import sys
 import shlex
 import ctypes
@@ -13,11 +12,10 @@ from pathlib import Path
 from collections import abc
 from textwrap import dedent
 from math import log10, ceil
-from dataclasses import dataclass
 from tkinter.font import Font, nametofont
 from functools import partial, cached_property
 from datetime import datetime, timedelta, timezone
-from tkinter import Tk, ttk, StringVar, DoubleVar, IntVar
+from tkinter import Tk, ttk, StringVar, DoubleVar, IntVar, filedialog
 from typing import Any, Union, Tuple, TypedDict, NoReturn, Generic, TYPE_CHECKING
 
 import pystray
@@ -34,6 +32,7 @@ if sys.platform == "darwin":
     import AppKit
 
 from translate import _
+from diagnostics import configure_verbose_logging
 from cache import ImageCache
 from exceptions import MinerException, ExitRequest
 from utils import resource_path, set_root_icon, webopen, Game, _T
@@ -55,7 +54,7 @@ if sys.platform == "win32":
 
 
 if TYPE_CHECKING:
-    from twitch import Twitch
+    from kick import Kick
     from channel import Channel
     from settings import Settings
     from inventory import DropsCampaign, TimedDrop
@@ -516,48 +515,37 @@ class WebsocketStatus:
         self._topics_var.set('\n'.join(topic_lines))
 
 
-@dataclass
-class LoginData:
-    username: str
-    password: str
-    token: str
-
-
 class LoginForm:
     def __init__(self, manager: GUIManager, master: ttk.Widget):
         self._manager = manager
         self._var = StringVar(master)
         frame = ttk.LabelFrame(master, text=_("gui", "login", "name"), padding=(4, 0, 4, 4))
         frame.grid(column=1, row=1, sticky="nsew", padx=2)
-        frame.columnconfigure(0, weight=2)
+        frame.columnconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(4, weight=1)
+        frame.rowconfigure(1, weight=1)
         ttk.Label(frame, text=_("gui", "login", "labels")).grid(column=0, row=0)
         ttk.Label(frame, textvariable=self._var, justify="center").grid(column=1, row=0)
-        self._login_entry = PlaceholderEntry(frame, placeholder=_("gui", "login", "username"))
-        # self._login_entry.grid(column=0, row=1, columnspan=2)
-        self._pass_entry = PlaceholderEntry(
-            frame, placeholder=_("gui", "login", "password"), show='•'
-        )
-        # self._pass_entry.grid(column=0, row=2, columnspan=2)
-        self._token_entry = PlaceholderEntry(frame, placeholder=_("gui", "login", "twofa_code"))
-        # self._token_entry.grid(column=0, row=3, columnspan=2)
-
+        self._selected_path: Path | None = None
         self._confirm = asyncio.Event()
         self._button = ttk.Button(
-            frame, text=_("gui", "login", "button"), command=self._confirm.set, state="disabled"
+            frame,
+            text=_("gui", "login", "button"),
+            command=self._select_cookie_file,
+            state="disabled",
         )
-        self._button.grid(column=0, row=4, columnspan=2)
+        self._button.grid(column=0, row=1, columnspan=2)
         self.update(_("gui", "login", "logged_out"), None)
 
-    def clear(self, login: bool = False, password: bool = False, token: bool = False):
-        clear_all = not login and not password and not token
-        if login or clear_all:
-            self._login_entry.clear()
-        if password or clear_all:
-            self._pass_entry.clear()
-        if token or clear_all:
-            self._token_entry.clear()
+    def _select_cookie_file(self) -> None:
+        selected = filedialog.askopenfilename(
+            parent=self._manager._root,
+            title=_("gui", "login", "button"),
+            filetypes=(("cookies.txt", "*.txt"), ("All files", "*.*")),
+        )
+        if selected:
+            self._selected_path = Path(selected)
+            self._confirm.set()
 
     async def wait_for_login_press(self) -> None:
         self._confirm.clear()
@@ -567,49 +555,21 @@ class LoginForm:
         finally:
             self._button.config(state="disabled")
 
-    async def ask_login(self) -> LoginData:
+    async def ask_cookie_file(self) -> Path:
         self.update(_("gui", "login", "required"), None)
-        # ensure the window isn't hidden into tray when this runs
-        self._manager.grab_attention(sound=False)
-        while True:
-            self._manager.print(_("gui", "login", "request"))
-            await self.wait_for_login_press()
-            login_data = LoginData(
-                self._login_entry.get().strip(),
-                self._pass_entry.get(),
-                self._token_entry.get().strip(),
-            )
-            # basic input data validation: 3-25 characters in length, only ascii and underscores
-            if (
-                not 3 <= len(login_data.username) <= 25
-                and re.match(r'^[a-zA-Z0-9_]+$', login_data.username)
-            ):
-                self.clear(login=True)
-                continue
-            if len(login_data.password) < 8:
-                self.clear(password=True)
-                continue
-            if login_data.token and len(login_data.token) < 6:
-                self.clear(token=True)
-                continue
-            return login_data
-
-    async def ask_enter_code(self, page_url: URL, user_code: str) -> None:
-        self.update(_("gui", "login", "required"), None)
-        # ensure the window isn't hidden into tray when this runs
         self._manager.grab_attention(sound=False)
         self._manager.print(_("gui", "login", "request"))
         await self.wait_for_login_press()
-        self._manager.print(f"Enter this code on the Twitch's device activation page: {user_code}")
-        await asyncio.sleep(4)
-        webopen(page_url)
+        if self._selected_path is None:
+            raise RuntimeError("Cookie file selection completed without a path")
+        return self._selected_path
 
-    def update(self, status: str, user_id: int | None):
-        if user_id is not None:
-            user_str = str(user_id)
+    def update(self, status: str, identity: str | int | None):
+        if identity is not None:
+            identity_str = str(identity)
         else:
-            user_str = "-"
-        self._var.set(f"{status}\n{user_str}")
+            identity_str = "-"
+        self._var.set(f"{status}\n{identity_str}")
 
 
 class _BaseVars(TypedDict):
@@ -864,7 +824,7 @@ class ChannelList:
                 buttons_frame,
                 text=_("gui", "channels", "switch"),
                 state="disabled",
-                command=manager._twitch.state_change(State.CHANNEL_SWITCH),
+                command=manager._kick.state_change(State.CHANNEL_SWITCH),
             ),
         }
         buttons_frame.grid(column=0, row=0, columnspan=2)
@@ -1078,7 +1038,7 @@ class ChannelList:
 
 
 class TrayIcon:
-    TITLE = "Twitch Drops Miner"
+    TITLE = "Kick Drops Miner"
 
     def __init__(self, manager: GUIManager, master: ttk.Widget):
         self._manager = manager
@@ -1147,7 +1107,7 @@ class TrayIcon:
             pystray.MenuItem(_("gui", "tray", "quit"), bridge(self.quit)),
         )
         self.icon = pystray.Icon(
-            "twitch_miner", self._icon_images[self._icon_state], self.get_title(drop), menu
+            "kick_miner", self._icon_images[self._icon_state], self.get_title(drop), menu
         )
         # self.icon.run_detached()
         loop.run_in_executor(None, self.icon.run)
@@ -1179,7 +1139,7 @@ class TrayIcon:
         self, message: str, title: str | None = None, duration: float = 10
     ) -> asyncio.Task[None] | None:
         # do nothing if the user disabled notifications
-        if not self._manager._twitch.settings.tray_notifications:
+        if not self._manager._kick.settings.tray_notifications:
             return None
         if self.icon is not None:
             icon = self.icon  # nonlocal scope bind
@@ -1235,7 +1195,7 @@ class InventoryOverview:
     def __init__(self, manager: GUIManager, master: ttk.Widget):
         self._manager = manager
         self._cache: ImageCache = manager._cache
-        self._settings: Settings = manager._twitch.settings
+        self._settings: Settings = manager._kick.settings
         self._filters = {
             "not_linked": IntVar(
                 master, self._settings.priority_mode is PriorityMode.PRIORITY_ONLY
@@ -1564,12 +1524,11 @@ class _SettingsVars(TypedDict):
     language: StringVar
     priority_mode: StringVar
     tray_notifications: IntVar
-    enable_badges_emotes: IntVar
-    available_drops_check: IntVar
+    verbose_logging: IntVar
 
 
 class SettingsPanel:
-    AUTOSTART_NAME: str = "TwitchDropsMiner"
+    AUTOSTART_NAME: str = "KickDropsMiner"
     AUTOSTART_KEY: str = "HKCU/Software/Microsoft/Windows/CurrentVersion/Run"
 
     @cached_property
@@ -1586,7 +1545,7 @@ class SettingsPanel:
 
     def __init__(self, manager: GUIManager, master: ttk.Widget):
         self._manager = manager
-        self._settings: Settings = manager._twitch.settings
+        self._settings: Settings = manager._kick.settings
         priority_mode = self._settings.priority_mode
         if priority_mode not in self.PRIORITY_MODES:
             priority_mode = PriorityMode.PRIORITY_ONLY
@@ -1599,12 +1558,7 @@ class SettingsPanel:
             "dark_mode": IntVar(master, int(self._settings.dark_mode)),
             "priority_mode": StringVar(master, self.PRIORITY_MODES[priority_mode]),
             "tray_notifications": IntVar(master, self._settings.tray_notifications),
-            "enable_badges_emotes": IntVar(
-                master, int(self._settings.enable_badges_emotes)
-            ),
-            "available_drops_check": IntVar(
-                master, int(self._settings.available_drops_check)
-            ),
+            "verbose_logging": IntVar(master, self._settings.verbose_logging),
         }
         self._game_names: set[str] = set()
         master.rowconfigure(0, weight=1)
@@ -1673,6 +1627,14 @@ class SettingsPanel:
             command=self.update_dark_mode,
         ).grid(column=1, row=irow, sticky="w")
         ttk.Label(
+            checkboxes_frame, text=_("gui", "settings", "general", "verbose_logging")
+        ).grid(column=0, row=(irow := irow + 1), sticky="e")
+        ttk.Checkbutton(
+            checkboxes_frame,
+            variable=self._vars["verbose_logging"],
+            command=self.update_verbose_logging,
+        ).grid(column=1, row=irow, sticky="w")
+        ttk.Label(
             checkboxes_frame, text=_("gui", "settings", "general", "priority_mode")
         ).grid(column=0, row=(irow := irow + 1), sticky="e")
         SelectCombobox(
@@ -1716,32 +1678,6 @@ class SettingsPanel:
             text=_("gui", "settings", "advanced", "warning_text"),
             foreground="goldenrod",
         ).grid(column=0, row=(irow := irow + 1), columnspan=2)
-        # Toggles for badges and emotes, and available drops check
-        ttk.Label(
-            advanced_center, text=_("gui", "settings", "advanced", "enable_badges_emotes")
-        ).grid(column=0, row=(irow := irow + 1), sticky="e")
-        ttk.Checkbutton(
-            advanced_center,
-            variable=self._vars["enable_badges_emotes"],
-            command=lambda: setattr(
-                self._settings,
-                "enable_badges_emotes",
-                bool(self._vars["enable_badges_emotes"].get()),
-            ),
-        ).grid(column=1, row=irow, sticky="w")
-        ttk.Label(
-            advanced_center, text=_("gui", "settings", "advanced", "available_drops_check")
-        ).grid(column=0, row=(irow := irow + 1), sticky="e")
-        ttk.Checkbutton(
-            advanced_center,
-            variable=self._vars["available_drops_check"],
-            command=lambda: setattr(
-                self._settings,
-                "available_drops_check",
-                bool(self._vars["available_drops_check"].get()),
-            ),
-        ).grid(column=1, row=irow, sticky="w")
-
         # Priority section
         priority_frame = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "settings", "priority")
@@ -1840,7 +1776,7 @@ class SettingsPanel:
         ttk.Button(
             reload_frame,
             text=_("gui", "settings", "reload"),
-            command=self._manager._twitch.state_change(State.INVENTORY_FETCH),
+            command=self._manager._kick.state_change(State.INVENTORY_FETCH),
         ).grid(column=1, row=0)
 
         self._vars["autostart"].set(self._query_autostart())
@@ -1852,6 +1788,22 @@ class SettingsPanel:
     def update_dark_mode(self) -> None:
         self._settings.dark_mode = bool(self._vars["dark_mode"].get())
         self._manager.apply_theme(self._settings.dark_mode)
+
+    def update_verbose_logging(self) -> None:
+        enabled = bool(self._vars["verbose_logging"].get())
+        self._settings.verbose_logging = enabled
+        path = configure_verbose_logging(
+            enabled,
+            logging_level=self._settings.logging_level,
+            api_level=self._settings.debug_gql,
+            websocket_level=self._settings.debug_ws,
+        )
+        if path is not None:
+            self._manager.print(
+                _("gui", "settings", "general", "verbose_enabled").format(path=path)
+            )
+        else:
+            self._manager.print(_("gui", "settings", "general", "verbose_disabled"))
 
     def _get_self_path(self) -> str:
         # NOTE: we need double quotes in case the path contains spaces
@@ -1932,8 +1884,8 @@ class SettingsPanel:
                     f"""
                     [Desktop Entry]
                     Type=Application
-                    Name=Twitch Drops Miner
-                    Description=Mine timed drops on Twitch
+                    Name=Kick Drops Miner
+                    Description=Mine timed drops on Kick
                     Exec=sh -c '{self._get_autostart_path()}'
                     """
                 )
@@ -2091,7 +2043,7 @@ class HelpTab:
     WIDTH = 800
 
     def __init__(self, manager: GUIManager, master: ttk.Widget):
-        self._twitch = manager._twitch
+        self._kick = manager._kick
         master.rowconfigure(0, weight=1)
         master.columnconfigure(0, weight=1)
         # use a frame to center the content within the tab
@@ -2103,18 +2055,24 @@ class HelpTab:
         about.grid(column=0, row=(irow := irow + 1), sticky="nsew", padx=2)
         about.columnconfigure(2, weight=1)
         # About - created by
-        ttk.Label(
-            about, text="Application created by: ", anchor="e"
-        ).grid(column=0, row=0, sticky="nsew")
+        ttk.Label(about, text="Kick modification created by ", anchor="e").grid(
+            column=0, row=0, sticky="nsew"
+        )
+        LinkLabel(
+            about, link="https://github.com/Frollir", text="Frollir"
+        ).grid(column=1, row=0, sticky="nsew")
+        ttk.Label(about, text=", original Twitch app created by ").grid(
+            column=2, row=0, sticky="nsew"
+        )
         LinkLabel(
             about, link="https://github.com/DevilXD", text="DevilXD"
-        ).grid(column=1, row=0, sticky="nsew")
+        ).grid(column=3, row=0, sticky="nsew")
         # About - repo link
         ttk.Label(about, text="Repository: ", anchor="e").grid(column=0, row=1, sticky="nsew")
         LinkLabel(
             about,
-            link="https://github.com/DevilXD/TwitchDropsMiner",
-            text="https://github.com/DevilXD/TwitchDropsMiner",
+            link="https://github.com/Frollir/KickDropsMiner",
+            text="https://github.com/Frollir/KickDropsMiner",
         ).grid(column=1, row=1, sticky="nsew")
         # About - donate
         ttk.Separator(
@@ -2123,7 +2081,7 @@ class HelpTab:
         ttk.Label(about, text="Donate: ", anchor="e").grid(column=0, row=3, sticky="nsew")
         LinkLabel(
             about,
-            link="https://www.buymeacoffee.com/DevilXD",
+            link="https://buymeacoffee.com/frollir",
             text=(
                 "If you like the application and found it useful, "
                 "please consider donating a small amount of money to support me. Thank you!"
@@ -2137,14 +2095,22 @@ class HelpTab:
         links.grid(column=0, row=(irow := irow + 1), sticky="nsew", padx=2)
         LinkLabel(
             links,
-            link="https://www.twitch.tv/drops/inventory",
+            link="https://kick.com/drops",
             text=_("gui", "help", "links", "inventory"),
         ).grid(column=0, row=0, sticky="nsew")
         LinkLabel(
             links,
-            link="https://www.twitch.tv/drops/campaigns",
+            link="https://kick.com/drops",
             text=_("gui", "help", "links", "campaigns"),
         ).grid(column=0, row=1, sticky="nsew")
+        LinkLabel(
+            links,
+            link=(
+                "https://chromewebstore.google.com/detail/"
+                "get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
+            ),
+            text="Get cookies.txt Locally extension",
+        ).grid(column=0, row=2, sticky="nsew")
         # How It Works
         howitworks = ttk.LabelFrame(
             center_frame, padding=(4, 0, 4, 4), text=_("gui", "help", "how_it_works")
@@ -2168,8 +2134,8 @@ class HelpTab:
 
 
 class GUIManager:
-    def __init__(self, twitch: Twitch):
-        self._twitch: Twitch = twitch
+    def __init__(self, kick: Kick):
+        self._kick: Kick = kick
         self._poll_task: asyncio.Task[NoReturn] | None = None
         self._close_requested = asyncio.Event()
         self._root = root = Tk(className=WINDOW_TITLE)
@@ -2254,7 +2220,7 @@ class GUIManager:
         # register logging handler
         self._handler = _TKOutputHandler(self)
         self._handler.setFormatter(OUTPUT_FORMATTER)
-        logger = logging.getLogger("TwitchDrops")
+        logger = logging.getLogger("KickDrops")
         logger.addHandler(self._handler)
         if (logging_level := logger.getEffectiveLevel()) < logging.ERROR:
             self.print(f"Logging level: {logging.getLevelName(logging_level)}")
@@ -2287,9 +2253,9 @@ class GUIManager:
             self._orig_theme_name = self._style.theme_use()
         except Exception:
             self._orig_theme_name = ''
-        self.apply_theme(self._twitch.settings.dark_mode)
+        self.apply_theme(self._kick.settings.dark_mode)
         # stay hidden in tray if needed, otherwise show the window when everything's ready
-        if self._twitch.settings.tray and sys.platform != "darwin":
+        if self._kick.settings.tray and sys.platform != "darwin":
             # NOTE: this starts the tray icon thread
             self._root.after_idle(self.tray.minimize)
         else:
@@ -2387,7 +2353,7 @@ class GUIManager:
         """
         self._close_requested.set()
         # notify client we're supposed to close
-        self._twitch.close()
+        self._kick.close()
         return 0
 
     def close_window(self):
@@ -2395,7 +2361,7 @@ class GUIManager:
         Closes the window. Invalidates the logger.
         """
         self.tray.stop()
-        logging.getLogger("TwitchDrops").removeHandler(self._handler)
+        logging.getLogger("KickDrops").removeHandler(self._handler)
         self._root.destroy()
 
     def unfocus(self, event):
@@ -2731,10 +2697,9 @@ if __name__ == "__main__":
         tm = total_minutes
         ref_stamp = datetime.now(timezone.utc)
         drop_image_url = (
-            "https://static-cdn.jtvnw.net/twitch-quests-assets/"
-            "REWARD/e0ede26e-b071-47f0-af5f-b80b26fa9fb4.png"
+            "https://ext.kick.com/drops/organization/kickdrops.png"
         )
-        campaign_image_url = "https://static-cdn.jtvnw.net/ttv-boxart/515025-120x160.jpg"
+        campaign_image_url = "https://ext.kick.com/drops/organization/kickdrops.png"
         benefits = [SimpleNamespace(name=name, image_url=drop_image_url) for name in rewards]
         mock = SimpleNamespace(
             id="0",
@@ -2791,8 +2756,9 @@ if __name__ == "__main__":
                 autostart_tray=False,
                 exclude={"Lit Game"},
                 tray_notifications=True,
-                enable_badges_emotes=False,
-                available_drops_check=False,
+                verbose_logging=False,
+                debug_gql=logging.NOTSET,
+                debug_ws=logging.NOTSET,
                 logging_level=LOGGING_LEVELS[0],
                 priority_mode=PriorityMode.PRIORITY_ONLY,
             )

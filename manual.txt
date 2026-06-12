@@ -1,5 +1,5 @@
 ###################################
-# Twitch Drops Miner (by DevilXD) #
+# Kick Drops Miner #
 ###################################
 
 Available command line arguments:
@@ -14,7 +14,7 @@ Available command line arguments:
 	matches the level set by `-v`.
 • --dump
 	Start the application in a data-dump mode, where a 'dump.dat' file is created.
-	The file contains anonymous raw Twitch API data, studying of which can help troubleshoot
+	The file contains anonymous raw Kick API data, studying of which can help troubleshoot
 	issues with the application. The application automatically closes shortly after launching,
 	once dumping is finished.
 • --version

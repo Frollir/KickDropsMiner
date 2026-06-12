@@ -1,10 +1,10 @@
 @echo off
 IF NOT EXIST 7z.exe GOTO NO7Z
-IF NOT EXIST "Twitch Drops Miner" mkdir "Twitch Drops Miner"
+IF NOT EXIST "Kick Drops Miner" mkdir "Kick Drops Miner"
 rem Prepare files
-copy /y /v dist\*.exe "Twitch Drops Miner"
-copy /y /v manual.txt "Twitch Drops Miner"
-IF EXIST "Twitch Drops Miner.zip" (
+copy /y /v dist\*.exe "Kick Drops Miner"
+copy /y /v manual.txt "Kick Drops Miner"
+IF EXIST "Kick Drops Miner.zip" (
     rem Add action
     set action=a
 ) ELSE (
@@ -12,10 +12,10 @@ IF EXIST "Twitch Drops Miner.zip" (
     set action=u
 )
 rem Pack and test
-7z %action% "Twitch Drops Miner.zip" "Twitch Drops Miner/" -r
-7z t "Twitch Drops Miner.zip" * -r
+7z %action% "Kick Drops Miner.zip" "Kick Drops Miner/" -r
+7z t "Kick Drops Miner.zip" * -r
 rem Cleanup
-IF EXIST "Twitch Drops Miner" rmdir /s /q "Twitch Drops Miner"
+IF EXIST "Kick Drops Miner" rmdir /s /q "Kick Drops Miner"
 GOTO EXIT
 :NO7Z
 echo No 7z.exe detected, skipping packaging!

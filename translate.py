@@ -162,6 +162,9 @@ class GUISettingsGeneral(TypedDict):
     tray: str
     tray_notifications: str
     dark_mode: str
+    verbose_logging: str
+    verbose_enabled: str
+    verbose_disabled: str
     priority_mode: str
     proxy: str
 
@@ -262,9 +265,9 @@ default_translation: Translation = {
         "twofa_code_required": "2FA token required.",
     },
     "error": {
-        "captcha": "Your login attempt was denied by CAPTCHA.\nPlease try again in 12+ hours.",
-        "site_down": "Twitch is down, retrying in {seconds} seconds...",
-        "no_connection": "Cannot connect to Twitch, retrying in {seconds} seconds... ({url})",
+        "captcha": "Kick rejected the login session. Import a fresh cookies.txt file.",
+        "site_down": "Kick is down, retrying in {seconds} seconds...",
+        "no_connection": "Cannot connect to Kick, retrying in {seconds} seconds... ({url})",
     },
     "gui": {
         "output": "Output",
@@ -293,17 +296,17 @@ default_translation: Translation = {
             "quit": "Quit",
         },
         "login": {
-            "name": "Login Form",
-            "labels": "Status:\nUser ID:",
+            "name": "Kick Account",
+            "labels": "Status:\nPlatform:",
             "logged_in": "Logged in",
             "logged_out": "Logged out",
             "logging_in": "Logging in...",
             "required": "Login required",
-            "request": "Please log in to continue.",
+            "request": "Export Kick cookies in Netscape cookies.txt format, then import the file.",
             "username": "Username",
             "password": "Password",
             "twofa_code": "2FA code (optional)",
-            "button": "Login",
+            "button": "Import cookies.txt",
         },
         "websocket": {
             "name": "Websocket Status",
@@ -372,16 +375,18 @@ default_translation: Translation = {
                 "tray": "Autostart into tray: ",
                 "tray_notifications": "Tray notifications: ",
                 "dark_mode": "Dark mode: ",
+                "verbose_logging": "Verbose diagnostic logging: ",
+                "verbose_enabled": "Verbose logging enabled: {path}",
+                "verbose_disabled": "Verbose logging disabled.",
                 "priority_mode": "Priority mode: ",
                 "proxy": "Proxy (requires restart):",
             },
             "advanced": {
                 "name": "Advanced",
-                "warning": "Warning!",
+                "warning": "Private Kick API",
                 "warning_text": (
-                    "These options will cause the miner to misbehave.\n"
-                    "If you're experiencing any issues, "
-                    "make sure all of these options are disabled."
+                    "Kick does not publish a Drops API.\n"
+                    "Endpoint changes may require an application update."
                 ),
                 "enable_badges_emotes": "Enable partial support for badges and emotes: ",
                 "available_drops_check": "Enable extra available drops check: ",
@@ -400,24 +405,20 @@ default_translation: Translation = {
         "help": {
             "links": {
                 "name": "Useful Links",
-                "inventory": "See Twitch inventory",
-                "campaigns": "See all campaigns and manage account links",
+                "inventory": "See Kick drops",
+                "campaigns": "See all Kick campaigns",
             },
             "how_it_works": "How It Works",
             "how_it_works_text": (
-                "Every several seconds, the application pretends to watch a particular stream "
-                "by fetching stream metadata - this is enough to advance the drops. "
-                "Note that this completely bypasses the need to download "
-                "any actual stream of video and sound. "
-                "To keep the status (ONLINE or OFFLINE) of the channels up-to-date, "
-                "there's a websocket connection established that receives events about streams "
-                "going up or down, or updates regarding the current number of viewers."
+                "The application connects to Kick's viewer websocket and reports the active "
+                "livestream without downloading video or audio. It periodically refreshes "
+                "campaign progress, changes channels when needed, and claims completed rewards."
             ),
             "getting_started": "Getting Started",
             "getting_started_text": (
-                "1. Login to the application.\n"
-                "2. Ensure your Twitch account is linked to all campaigns "
-                "you're interested in mining.\n"
+                "1. Log in to Kick in your browser and export kick.com cookies "
+                "in Netscape cookies.txt format.\n"
+                "2. Import the cookies.txt file in the application.\n"
                 "3. If you're interested in mining everything possible, "
                 "change the Priority Mode to anything other than \"Priority list only\" "
                 "and press on \"Reload\".\n"

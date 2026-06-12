@@ -20,8 +20,7 @@ class SettingsFile(TypedDict):
     autostart_tray: bool
     connection_quality: int
     tray_notifications: bool
-    enable_badges_emotes: bool
-    available_drops_check: bool
+    verbose_logging: bool
     priority_mode: PriorityMode
 
 
@@ -34,8 +33,7 @@ default_settings: SettingsFile = {
     "connection_quality": 1,
     "language": DEFAULT_LANG,
     "tray_notifications": True,
-    "enable_badges_emotes": False,
-    "available_drops_check": False,
+    "verbose_logging": False,
     "priority_mode": PriorityMode.PRIORITY_ONLY,
 }
 
@@ -58,8 +56,7 @@ class Settings:
     autostart_tray: bool
     connection_quality: int
     tray_notifications: bool
-    enable_badges_emotes: bool
-    available_drops_check: bool
+    verbose_logging: bool
     priority_mode: PriorityMode
 
     PASSTHROUGH = ("_settings", "_args", "_altered")

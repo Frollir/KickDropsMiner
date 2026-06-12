@@ -93,22 +93,22 @@ jobs:
 
       - name: Create release folder
         run: |
-          $FolderName = 'Twitch Drops Miner'
+          $FolderName = 'Kick Drops Miner'
           New-Item $FolderName -ItemType Directory
           Copy-Item dist\*.exe $FolderName
           Copy-Item manual.txt $FolderName
-          Compress-Archive -Path $FolderName -DestinationPath Twitch.Drops.Miner.Windows.zip
+          Compress-Archive -Path $FolderName -DestinationPath Kick.Drops.Miner.Windows.zip
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
-          name: Twitch.Drops.Miner.Windows
-          path: Twitch.Drops.Miner.Windows.zip
+          name: Kick.Drops.Miner.Windows
+          path: Kick.Drops.Miner.Windows.zip
 
   macos:
-    name: macOS
-    runs-on: macos-latest
+    name: macOS (arm64)
+    runs-on: macos-15
     needs:
       - validate
 
@@ -143,102 +143,34 @@ jobs:
         run: |
           pyinstaller build.spec --noconfirm
 
-      - name: Create release folder and Zip
+      - name: Verify application bundle
         run: |
-          FOLDER="Twitch Drops Miner"
-          mkdir -p "$FOLDER"
-          cp -r "dist/Twitch Drops Miner (by DevilXD).app" "$FOLDER/"
-          cp manual.txt "$FOLDER/"
-          zip -r Twitch.Drops.Miner.MacOS.zip "$FOLDER"
+          app="dist/Kick Drops Miner.app"
+          test -d "$app"
+          executable_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")
+          test "$bundle_id" = "com.kickdrops.miner"
+          test -x "$app/Contents/MacOS/$executable_name"
+          file "$app/Contents/MacOS/$executable_name" | grep -q 'arm64'
+          test "$(lipo -archs "$app/Contents/MacOS/$executable_name")" = "arm64"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv --verbose=4 "$app" 2>&1 | grep -q 'Signature=adhoc'
+
+      - name: Create release archive
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/Kick Drops Miner.app" \
+            Kick.Drops.Miner.macOS-arm64.zip
+          test -s Kick.Drops.Miner.macOS-arm64.zip
+          unzip -Z1 Kick.Drops.Miner.macOS-arm64.zip | \
+            grep -q '^Kick Drops Miner.app/Contents/Info.plist$'
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
-          name: Twitch.Drops.Miner.MacOS
-          path: Twitch.Drops.Miner.MacOS.zip
-
-  linux-pyinstaller:
-    name: Linux (PyInstaller) (${{matrix.arch}})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            runner: ubuntu-22.04
-          - arch: aarch64
-            runner: ubuntu-22.04-arm
-    runs-on: ${{matrix.runner}}
-    needs:
-      - validate
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up variables
-        id: vars
-        run: |
-          echo "sha_short=$(git rev-parse --short HEAD)" >> "${GITHUB_OUTPUT}"
-
-      - name: Append git revision to project version
-        run: |
-          sed -ri "s/^__version__\s*=\s*\"[^\"]+/\0.${{steps.vars.outputs.sha_short}}/" version.py
-
-      # Ensure Python version
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{env.PYTHON_VERSION}}
-
-      - name: Install system dependencies
-        run: |
-          sudo apt update
-          sudo apt install libgirepository1.0-dev gir1.2-ayatanaappindicator3-0.1 libayatana-appindicator3-1 python3-tk
-
-      - name: Install project dependencies
-        run: |
-          python3 -m pip install wheel
-          python3 -m pip install -r requirements.txt
-
-      - name: Install PyInstaller
-        run: |
-          python3 -m pip install pyinstaller
-
-      # NOTE: Remove this step if/once libxft gets updated to 2.3.5 or newer on Ubuntu 22.04, which currently has 2.3.4.
-      - name: Build a recent version of libXft
-        run: |
-          mkdir -p /tmp/libXft
-          cd /tmp/libXft
-          curl -fL https://xorg.freedesktop.org/releases/individual/lib/libXft-2.3.9.tar.xz -o libXft.tar.xz
-          sha256sum libXft.tar.xz
-          tar xvf libXft.tar.xz
-          cd libXft-*
-          ./configure --prefix=/tmp/libXft --sysconfdir=/etc --disable-static
-          make
-          make install-strip
-
-      - name: Create portable executable
-        run: |
-          LD_LIBRARY_PATH=/tmp/libXft/lib xvfb-run --auto-servernum pyinstaller build.spec
-
-      - name: Show PyInstaller warnings
-        run: |
-          cat build/build/warn-build.txt || true
-
-      - name: Create release folder
-        run: |
-          folder='Twitch Drops Miner'
-          mkdir "${folder}"
-          cp manual.txt dist/* "${folder}"
-          7z a 'Twitch.Drops.Miner.Linux.PyInstaller-${{matrix.arch}}.zip' "${folder}"
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          if-no-files-found: error
-          name: Twitch.Drops.Miner.Linux.PyInstaller-${{matrix.arch}}
-          path: Twitch.Drops.Miner.Linux.PyInstaller-${{matrix.arch}}.zip
+          name: Kick.Drops.Miner.macOS-arm64
+          path: Kick.Drops.Miner.macOS-arm64.zip
 
   linux-appimage:
     name: Linux (AppImage) (${{matrix.arch}})
@@ -287,26 +219,34 @@ jobs:
         run: |
           appimage-builder --recipe appimage/AppImageBuilder.yml
 
-      - name: Create release folder
+      - name: Verify AppImage
         run: |
-          folder='Twitch Drops Miner'
-          mkdir "${folder}"
-          cp *.AppImage manual.txt "${folder}"
-          7z a 'Twitch.Drops.Miner.Linux.AppImage-${{matrix.arch}}.zip' "${folder}"
+          image='Kick.Drops.Miner-${{matrix.arch}}.AppImage'
+          test -f "$image"
+          test -s "$image"
+          chmod +x "$image"
+          case '${{matrix.arch}}' in
+            x86_64) file "$image" | grep -q 'x86-64' ;;
+            aarch64) file "$image" | grep -q 'ARM aarch64' ;;
+            *) echo "Unsupported architecture: ${{matrix.arch}}" >&2; exit 1 ;;
+          esac
+          rm -rf squashfs-root
+          "./$image" --appimage-extract >/dev/null
+          test -x squashfs-root/AppRun
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
-          name: Twitch.Drops.Miner.Linux.AppImage-${{matrix.arch}}
-          path: Twitch.Drops.Miner.Linux.AppImage-${{matrix.arch}}.zip
+          name: Kick.Drops.Miner.Linux-${{matrix.arch}}
+          path: Kick.Drops.Miner-${{matrix.arch}}.AppImage
+          compression-level: 0
 
   update_releases_page:
     name: Upload builds to Releases
     if: github.event_name != 'pull_request'
     needs:
       - windows
-      - linux-pyinstaller
       - linux-appimage
       - macos
     runs-on: ubuntu-latest
@@ -323,6 +263,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Verify release artifacts
+        run: |
+          test -s artifacts/Kick.Drops.Miner.Windows/Kick.Drops.Miner.Windows.zip
+          test -s artifacts/Kick.Drops.Miner.Linux-x86_64/Kick.Drops.Miner-x86_64.AppImage
+          test -s artifacts/Kick.Drops.Miner.Linux-aarch64/Kick.Drops.Miner-aarch64.AppImage
+          test -s artifacts/Kick.Drops.Miner.macOS-arm64/Kick.Drops.Miner.macOS-arm64.zip
 
       - name: Delete the existing pre-release (if present)
         run: |

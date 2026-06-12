@@ -34,7 +34,7 @@ _T = TypeVar("_T")  # type
 _D = TypeVar("_D")  # default
 _P = ParamSpec("_P")  # params
 _JSON_T = TypeVar("_JSON_T", bound=Mapping[Any, Any])
-logger = logging.getLogger("TwitchDrops")
+logger = logging.getLogger("KickDrops")
 
 
 def set_root_icon(root: tk.Tk, image_path: Path | str) -> None:
@@ -139,17 +139,15 @@ def task_wrapper(
             except Exception:
                 logger.exception(f"Exception in {afunc.__name__} task")
                 if critical:
-                    # critical task's death should trigger a termination.
-                    # there isn't an easy and sure way to obtain the Twitch instance here,
-                    # but we can improvise finding it
-                    from twitch import Twitch  # cyclic import
-                    probe = args and args[0] or None  # extract from 'self' arg
-                    if isinstance(probe, Twitch):
-                        probe.close()
-                    elif probe is not None:
-                        probe = getattr(probe, "_twitch", None)  # extract from '_twitch' attr
-                        if isinstance(probe, Twitch):
-                            probe.close()
+                    # Critical task failures should terminate whichever miner owns the task.
+                    probe = args and args[0] or None
+                    owner = probe
+                    if owner is not None and not callable(getattr(owner, "close", None)):
+                        owner = (
+                            getattr(owner, "_kick", None)
+                        )
+                    if owner is not None and callable(getattr(owner, "close", None)):
+                        owner.close()
                 raise  # raise up to the wrapping task
         return wrapper
     if afunc is None:

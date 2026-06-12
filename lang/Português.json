@@ -13,7 +13,7 @@
         "chrome": {
             "startup": "Abrindo Google Chrome",
             "login_to_complete": "Por Favor complete o login pela pagina web manualmente pressionando o botão Login novamente.",
-            "no_token": "Seu Token de autorização Twitch não foi encontrado",
+            "no_token": "Seu Token de autorização Kick não foi encontrado",
             "closed_window": "O Google Chrome foi fechado antes da autenticação ser concluída."
         },
         "error_code": "Código de erro do login: {error_code}",
@@ -26,7 +26,7 @@
     },
     "error": {
         "captcha": "Seu login foi negado pelo CAPTCHA.\nPor favor tente em aproximadamente 12+ horas.",
-        "site_down": "Twitch está fora do ar, tentando novamente em {seconds} segundos...",
+        "site_down": "Kick está fora do ar, tentando novamente em {seconds} segundos...",
         "no_connection": "Sem conexão com a TWITCH, reconectando em {seconds} segundos... ({url})"
     },
     "gui": {
@@ -147,13 +147,13 @@
         "help": {
             "links": {
                 "name": "Links Uteis",
-                "inventory": "Ver inventario da Twitch",
+                "inventory": "Ver inventario da Kick",
                 "campaigns": "Veja todas campanhas e gerencie conexões da sua conta"
             },
             "how_it_works": "Como funciona",
             "how_it_works_text": "A cada 60 segundos, o app envia um event \"minute watched\" ao canal que está sendo assistido no momento - Isso é o suficiente para avançar o progresso dos drops. Note que esse modo evita a necessidade de baixar o áudio e vídeo da stream, como é feito tradicionalmente quando se utiliza um navegador web. Para manter atualizado o status do canal (ONLINE ou OFFLINE), é estabelecida uma conexão websocket, que recebe diversos eventos relacionados a stream atual, como: se ela está ligada ou desligada, ou número total de espectadores.",
             "getting_started": "Iniciando",
-            "getting_started_text": "1. Autentique-se no app com a sua conta da Twitch.\n2. Certifique-se que todas campanhas estão conectadas com as contas dos respectivos aplicativos.\n3. Se quiser coletar tudo, desmarque \"Apenas com Prioridade\" e clique em \"Recarregar\".\n4. Se quiser coletar apenas de certos jogos, use a lista \"Prioridade\" para configurar a lista de jogos que você quer coletar. A lista segue a ordem que é apresentada, do primeiro ao último, sendo assim, a coleta continuará para os jogos seguintes assim que o jogo anterior esteja completo.\n5. Mantenha a opção \"Priority only\" ativa, para evitar que a coleta ocorra em jogos que não estão na lista de prioridades. Ou não - você quem manda.\n6. Use a lista \"Excluir\" para jogos que NUNCA devam ser coletados.\n7. Qualquer mudança feita nas listas requer que você clique no botão \"Recarregar\" para que as mudanças tenham efeito."
+            "getting_started_text": "1. Autentique-se no app com a sua conta da Kick.\n2. Certifique-se que todas campanhas estão conectadas com as contas dos respectivos aplicativos.\n3. Se quiser coletar tudo, desmarque \"Apenas com Prioridade\" e clique em \"Recarregar\".\n4. Se quiser coletar apenas de certos jogos, use a lista \"Prioridade\" para configurar a lista de jogos que você quer coletar. A lista segue a ordem que é apresentada, do primeiro ao último, sendo assim, a coleta continuará para os jogos seguintes assim que o jogo anterior esteja completo.\n5. Mantenha a opção \"Priority only\" ativa, para evitar que a coleta ocorra em jogos que não estão na lista de prioridades. Ou não - você quem manda.\n6. Use a lista \"Excluir\" para jogos que NUNCA devam ser coletados.\n7. Qualquer mudança feita nas listas requer que você clique no botão \"Recarregar\" para que as mudanças tenham efeito."
         }
     }
 }

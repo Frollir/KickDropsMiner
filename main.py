@@ -22,10 +22,10 @@ if __name__ == "__main__":
     truststore.inject_into_ssl()
 
     from translate import _
-    from twitch import Twitch
+    from kick import Kick
+    from diagnostics import configure_verbose_logging
     from settings import Settings
     from version import __version__
-    from exceptions import CaptchaRequired
     from utils import lock_file, resource_path, set_root_icon
     from constants import LOGGING_LEVELS, SELF_PATH, FILE_FORMATTER, LOG_PATH, LOCK_PATH
 
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     root.update()
     parser = Parser(
         SELF_PATH.name,
-        description="A program that allows you to mine timed drops on Twitch.",
+        description="A program that allows you to mine timed drops on Kick.",
     )
     parser.add_argument("--version", action="version", version=f"v{__version__}")
     parser.add_argument("-v", dest="_verbose", action="count", default=0)
@@ -142,27 +142,29 @@ if __name__ == "__main__":
             # redirect the root logger into a NullHandler, effectively ignoring all logging calls
             # that aren't ours. This always runs, unless the main logging level is DEBUG or lower.
             logging.getLogger().addHandler(logging.NullHandler())
-        logger = logging.getLogger("TwitchDrops")
+        logger = logging.getLogger("KickDrops")
         logger.setLevel(settings.logging_level)
         if settings.log:
             handler = logging.FileHandler(LOG_PATH)
             handler.setFormatter(FILE_FORMATTER)
             logger.addHandler(handler)
-        logging.getLogger("TwitchDrops.gql").setLevel(settings.debug_gql)
-        logging.getLogger("TwitchDrops.websocket").setLevel(settings.debug_ws)
+        logging.getLogger("KickDrops.api").setLevel(settings.debug_gql)
+        logging.getLogger("KickDrops.websocket").setLevel(settings.debug_ws)
+        configure_verbose_logging(
+            settings.verbose_logging,
+            logging_level=settings.logging_level,
+            api_level=settings.debug_gql,
+            websocket_level=settings.debug_ws,
+        )
 
         exit_status = 0
-        client = Twitch(settings)
+        client = Kick(settings)
         loop = asyncio.get_running_loop()
         if sys.platform == "linux":
             loop.add_signal_handler(signal.SIGINT, lambda *_: client.gui.close())
             loop.add_signal_handler(signal.SIGTERM, lambda *_: client.gui.close())
         try:
             await client.run()
-        except CaptchaRequired:
-            exit_status = 1
-            client.prevent_close()
-            client.print(_("error", "captcha"))
         except Exception:
             exit_status = 1
             client.prevent_close()

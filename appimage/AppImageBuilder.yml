@@ -21,7 +21,7 @@ script:
   # Package the app.
   - mkdir -p "$TARGET_APPDIR"/usr/{src,share/icons/hicolor/128x128/apps}
   - cp -r "$SOURCE_DIR/../lang" "$SOURCE_DIR/../icons" "$SOURCE_DIR"/../*.py "$TARGET_APPDIR/usr/src"
-  - cp "$SOURCE_DIR/pickaxe.png" "$TARGET_APPDIR/usr/share/icons/hicolor/128x128/apps/io.github.devilxd.twitchdropsminer.png"
+  - cp "$SOURCE_DIR/pickaxe.png" "$TARGET_APPDIR/usr/share/icons/hicolor/128x128/apps/io.github.frollir.kickdropsminer.png"
 
   # Create a virtual environment and install up-to-date versions of meson and ninja.
   - python3 -m venv env && ./env/bin/python3 -m pip install meson ninja
@@ -35,9 +35,9 @@ script:
 
 AppDir:
   app_info:
-    id: io.github.devilxd.twitchdropsminer
-    name: Twitch Drops Miner
-    icon: io.github.devilxd.twitchdropsminer
+    id: io.github.frollir.kickdropsminer
+    name: Kick Drops Miner
+    icon: io.github.frollir.kickdropsminer
     version: '{{APP_VERSION}}'
     exec: usr/bin/python3
     exec_args: '${APPDIR}/usr/src/main.py $@'
@@ -158,7 +158,7 @@ AppDir:
 
 AppImage:
   arch: '{{ARCH}}'
-  file_name: Twitch.Drops.Miner-{{ARCH}}.AppImage
+  file_name: Kick.Drops.Miner-{{ARCH}}.AppImage
   comp: zstd
   sign-key: None
   update-information: guess

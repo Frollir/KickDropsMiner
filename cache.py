@@ -38,7 +38,7 @@ class ImageCache:
 
     def __init__(self, manager: GUIManager) -> None:
         self._root = manager._root
-        self._twitch = manager._twitch
+        self._kick = manager._kick
         cleanup: bool = False
         CACHE_PATH.mkdir(parents=True, exist_ok=True)
         try:
@@ -109,9 +109,9 @@ class ImageCache:
                         pass
             if image is None:
                 try:
-                    async with self._twitch.request("GET", url) as response:
-                        if response.status != 404:
-                            image = Image_module.open(io.BytesIO(await response.read()))
+                    status, contents = await self._kick.request_bytes(str(url))
+                    if status != 404:
+                        image = Image_module.open(io.BytesIO(contents))
                 except Exception:
                     pass
                 if image is None:
