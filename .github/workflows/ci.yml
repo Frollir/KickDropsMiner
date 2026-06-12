@@ -32,7 +32,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt update
-          sudo apt install libcairo2-dev libgirepository1.0-dev pkg-config gir1.2-ayatanaappindicator3-0.1 libayatana-appindicator3-1 python3-tk
+          sudo apt install libcairo2-dev libgirepository1.0-dev pkg-config gir1.2-ayatanaappindicator3-0.1 libayatana-appindicator3-1 python3-tk xvfb
           python3 -m pip install wheel
           python3 -m pip install -r requirements.txt
 
@@ -53,7 +53,7 @@ jobs:
           fi
 
       - name: Run tests
-        run: python3 -m unittest discover -s tests -v
+        run: xvfb-run --auto-servernum python3 -m unittest discover -s tests -v
 
   windows:
     name: Windows
