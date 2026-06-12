@@ -58,7 +58,7 @@ jobs:
   windows:
     name: Windows
     if: github.event_name != 'pull_request'
-    runs-on: windows-latest
+    runs-on: windows-2025
     needs:
       - validate
 
@@ -115,7 +115,7 @@ jobs:
           Compress-Archive -Path $FolderName -DestinationPath Kick.Drops.Miner.Windows.zip
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           if-no-files-found: error
           name: Kick.Drops.Miner.Windows
@@ -182,7 +182,7 @@ jobs:
             grep -q '^Kick Drops Miner.app/Contents/Info.plist$'
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           if-no-files-found: error
           name: Kick.Drops.Miner.macOS-arm64
@@ -252,7 +252,7 @@ jobs:
           test -x squashfs-root/AppRun
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           if-no-files-found: error
           name: Kick.Drops.Miner.Linux-${{matrix.arch}}
@@ -277,7 +277,7 @@ jobs:
           echo "date_now=$(date --rfc-3339=seconds)" >> "${GITHUB_OUTPUT}"
 
       - name: Download build artifacts from previous jobs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
