@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
+import zipfile
 from collections import abc
-from typing import Any, TypedDict, TYPE_CHECKING
+from pathlib import Path
+from typing import Any, TypedDict, cast, TYPE_CHECKING
 
 from exceptions import MinerException
-from utils import json_load, json_save
-from constants import IS_PACKAGED, LANG_PATH, DEFAULT_LANG
+from utils import json_load, json_save, merge_json
+from constants import IS_PACKAGED, LANG_PATH, LANG_ARCHIVE, DEFAULT_LANG
 
 if TYPE_CHECKING:
     from typing_extensions import NotRequired
@@ -443,6 +446,7 @@ default_translation: Translation = {
 class Translator:
     def __init__(self) -> None:
         self._langs: list[str] = []
+        self._language_files: dict[str, Path | str] = {}
         # start with (and always copy) the default translation
         self._translation: Translation = default_translation.copy()
         # if we're in dev, update the template English.json file
@@ -451,8 +455,15 @@ class Translator:
             json_save(default_langpath, default_translation)
         self._translation["language_name"] = DEFAULT_LANG
         # load available translation names
-        for filepath in LANG_PATH.glob("*.json"):
-            self._langs.append(filepath.stem)
+        if LANG_PATH.is_dir():
+            for filepath in LANG_PATH.glob("*.json"):
+                self._language_files[filepath.stem] = filepath
+        elif LANG_ARCHIVE.is_file():
+            with zipfile.ZipFile(LANG_ARCHIVE) as archive:
+                for filename in archive.namelist():
+                    if filename.endswith(".json"):
+                        self._language_files[Path(filename).stem] = filename
+        self._langs.extend(self._language_files)
         self._langs.sort()
         if DEFAULT_LANG in self._langs:
             self._langs.remove(DEFAULT_LANG)
@@ -476,9 +487,14 @@ class Translator:
             # default language selected - use the memory value
             self._translation = default_translation.copy()
         else:
-            self._translation = json_load(
-                LANG_PATH.joinpath(f"{language}.json"), default_translation
-            )
+            source = self._language_files[language]
+            if isinstance(source, Path):
+                self._translation = json_load(source, default_translation)
+            else:
+                with zipfile.ZipFile(LANG_ARCHIVE) as archive:
+                    loaded = json.loads(archive.read(source))
+                merge_json(loaded, default_translation)
+                self._translation = cast(Translation, loaded)
             if "language_name" in self._translation:
                 raise ValueError("Translations cannot define 'language_name'")
         self._translation["language_name"] = language

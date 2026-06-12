@@ -32,7 +32,11 @@ else:
     if SELF_PATH.stem == "pyinstaller" or SELF_PATH.name == "gui.py":
         SELF_PATH = Path(__file__).with_name("main.py").resolve()
 
-WORKING_DIR = SELF_PATH.parent
+if IS_PACKAGED and sys.platform == "darwin":
+    WORKING_DIR = Path.home() / "Library/Application Support/Kick Drops Miner"
+    WORKING_DIR.mkdir(parents=True, exist_ok=True)
+else:
+    WORKING_DIR = SELF_PATH.parent
 VENV_PATH = Path(WORKING_DIR, "env")
 SITE_PACKAGES_PATH = Path(VENV_PATH, SYS_SITE_PACKAGES)
 SCRIPTS_PATH = Path(VENV_PATH, SYS_SCRIPTS)
@@ -49,6 +53,7 @@ def _resource_path(relative_path: Path | str) -> Path:
 
 
 LANG_PATH = _resource_path("lang")
+LANG_ARCHIVE = _resource_path("lang.zip")
 LOG_PATH = Path(WORKING_DIR, "log.txt")
 LOGS_PATH = Path(WORKING_DIR, "logs")
 VERBOSE_LOG_PATH = Path(LOGS_PATH, "kick-drops-miner.log")

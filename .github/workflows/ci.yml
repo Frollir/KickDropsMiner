@@ -159,19 +159,6 @@ jobs:
         run: |
           pyinstaller build.spec --noconfirm
 
-      - name: Verify application bundle
-        run: |
-          app="dist/Kick Drops Miner.app"
-          test -d "$app"
-          executable_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
-          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")
-          test "$bundle_id" = "com.kickdrops.miner"
-          test -x "$app/Contents/MacOS/$executable_name"
-          file "$app/Contents/MacOS/$executable_name" | grep -q 'arm64'
-          test "$(lipo -archs "$app/Contents/MacOS/$executable_name")" = "arm64"
-          codesign --verify --deep --strict --verbose=2 "$app"
-          codesign -dv --verbose=4 "$app" 2>&1 | grep -q 'Signature=adhoc'
-
       - name: Smoke test application launch
         run: |
           app="dist/Kick Drops Miner.app"
@@ -186,6 +173,19 @@ jobs:
           wait "$pid" || true
           trap - EXIT
 
+      - name: Verify application bundle
+        run: |
+          app="dist/Kick Drops Miner.app"
+          test -d "$app"
+          executable_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")
+          test "$bundle_id" = "com.kickdrops.miner"
+          test -x "$app/Contents/MacOS/$executable_name"
+          file "$app/Contents/MacOS/$executable_name" | grep -q 'arm64'
+          test "$(lipo -archs "$app/Contents/MacOS/$executable_name")" = "arm64"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv --verbose=4 "$app" 2>&1 | grep -q 'Signature=adhoc'
+
       - name: Create release archive
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
@@ -194,6 +194,10 @@ jobs:
           test -s Kick.Drops.Miner.macOS-arm64.zip
           unzip -Z1 Kick.Drops.Miner.macOS-arm64.zip | \
             grep -q '^Kick Drops Miner.app/Contents/Info.plist$'
+          mkdir extracted
+          ditto -x -k Kick.Drops.Miner.macOS-arm64.zip extracted
+          codesign --verify --deep --strict --verbose=2 \
+            "extracted/Kick Drops Miner.app"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7

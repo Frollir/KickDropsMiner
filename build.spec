@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 import platform
 import fnmatch
+import zipfile
 from pathlib import Path
 from collections import abc
 from traceback import format_exc
@@ -56,8 +57,19 @@ to_add: list[tuple[Path, str, bool]] = [
     (Path(SITE_PACKAGES_PATH, "seleniumwire/ca.crt"), "./seleniumwire", False),
     (Path(SITE_PACKAGES_PATH, "seleniumwire/ca.key"), "./seleniumwire", False),
 ]
-for lang_filepath in WORKING_DIR.joinpath("lang").glob("*.json"):
-    if lang_filepath.stem != DEFAULT_LANG:
+language_files = [
+    path for path in WORKING_DIR.joinpath("lang").glob("*.json")
+    if path.stem != DEFAULT_LANG
+]
+if sys.platform == "darwin":
+    language_archive = Path("build/macos/lang.zip")
+    language_archive.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(language_archive, "w", zipfile.ZIP_DEFLATED) as archive:
+        for lang_filepath in language_files:
+            archive.write(lang_filepath, lang_filepath.name)
+    to_add.append((language_archive, ".", True))
+else:
+    for lang_filepath in language_files:
         to_add.append((lang_filepath, "lang", True))
 
 # Ensure the required to-be-added data exists
