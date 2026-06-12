@@ -172,6 +172,20 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app"
           codesign -dv --verbose=4 "$app" 2>&1 | grep -q 'Signature=adhoc'
 
+      - name: Smoke test application launch
+        run: |
+          app="dist/Kick Drops Miner.app"
+          executable_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          "$app/Contents/MacOS/$executable_name" &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          sleep 8
+          kill -0 "$pid"
+          osascript -e 'tell application "System Events" to get name of every process whose unix id is '"$pid" | grep -q "Kick Drops Miner"
+          kill "$pid"
+          wait "$pid" || true
+          trap - EXIT
+
       - name: Create release archive
         run: |
           ditto -c -k --sequesterRsrc --keepParent \

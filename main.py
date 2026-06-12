@@ -14,16 +14,14 @@ if __name__ == "__main__":
     import argparse
     import warnings
     import traceback
-    import tkinter as tk
-    from tkinter import messagebox
     from typing import NoReturn, TYPE_CHECKING
 
     import truststore
     truststore.inject_into_ssl()
 
     from translate import _
-    from kick import Kick
     from diagnostics import configure_verbose_logging
+    from event_loop import AsyncTkBridge
     from settings import Settings
     from version import __version__
     from utils import lock_file, resource_path, set_root_icon
@@ -31,6 +29,7 @@ if __name__ == "__main__":
 
     if TYPE_CHECKING:
         from _typeshed import SupportsWrite
+        from kick import Kick
 
     warnings.simplefilter("default", ResourceWarning)
 
@@ -39,6 +38,18 @@ if __name__ == "__main__":
 
     if sys.version_info < (3, 10):
         raise RuntimeError("Python 3.10 or higher is required")
+
+    def show_error(title: str, message: str) -> None:
+        import tkinter as tk
+        from tkinter import messagebox
+
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            set_root_icon(root, resource_path("icons/pickaxe.ico"))
+            messagebox.showerror(title, message, parent=root)
+        finally:
+            root.destroy()
 
     class Parser(argparse.ArgumentParser):
         def __init__(self, *args, **kwargs) -> None:
@@ -50,10 +61,13 @@ if __name__ == "__main__":
             # print(message, file=self._message)
 
         def exit(self, status: int = 0, message: str | None = None) -> NoReturn:
-            try:
-                super().exit(status, message)  # sys.exit(2)
-            finally:
-                messagebox.showerror("Argument Parser Error", self._message.getvalue())
+            if message:
+                self._print_message(message)
+            if status:
+                show_error("Argument Parser Error", self._message.getvalue())
+            elif self._message.tell():
+                print(self._message.getvalue(), end="")
+            raise SystemExit(status)
 
     class ParsedArgs(argparse.Namespace):
         _verbose: int
@@ -90,13 +104,7 @@ if __name__ == "__main__":
             return logging.NOTSET
 
     # handle input parameters
-    # NOTE: parser output is shown via message box
-    # we also need a dummy invisible window for the parser
-    root = tk.Tk()
-    root.overrideredirect(True)
-    root.withdraw()
-    set_root_icon(root, resource_path("icons/pickaxe.ico"))
-    root.update()
+    # NOTE: parser errors are shown via a lazily-created message box
     parser = Parser(
         SELF_PATH.name,
         description="A program that allows you to mine timed drops on Kick.",
@@ -118,18 +126,14 @@ if __name__ == "__main__":
     try:
         settings = Settings(args)
     except Exception:
-        messagebox.showerror(
+        show_error(
             "Settings error",
             f"There was an error while loading the settings file:\n\n{traceback.format_exc()}"
         )
         sys.exit(4)
-    # dummy window isn't needed anymore
-    root.destroy()
-    # get rid of unneeded objects
-    del root, parser
+    del parser
 
-    # client run
-    async def main():
+    def configure_application() -> None:
         # set language
         try:
             _.set_language(settings.language)
@@ -157,8 +161,8 @@ if __name__ == "__main__":
             websocket_level=settings.debug_ws,
         )
 
+    async def run_client(client: Kick) -> int:
         exit_status = 0
-        client = Kick(settings)
         loop = asyncio.get_running_loop()
         if sys.platform == "linux":
             loop.add_signal_handler(signal.SIGINT, lambda *_: client.gui.close())
@@ -189,8 +193,15 @@ if __name__ == "__main__":
         # because the user can alter some settings between app termination and closing the window
         client.save(force=True)
         client.gui.stop()
-        client.gui.close_window()
-        sys.exit(exit_status)
+        return exit_status
+
+    def close_event_loop(loop: asyncio.AbstractEventLoop) -> None:
+        pending = asyncio.all_tasks(loop)
+        for task in pending:
+            task.cancel()
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        loop.close()
 
     try:
         # use lock_file to check if we're not already running
@@ -199,6 +210,19 @@ if __name__ == "__main__":
             # already running - exit
             sys.exit(3)
 
-        asyncio.run(main())
+        configure_application()
+        from kick import Kick
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        client = Kick(settings)
+        task = loop.create_task(run_client(client))
+        bridge = AsyncTkBridge(client.gui._root, loop, task)
+        try:
+            exit_status = bridge.run()
+        finally:
+            close_event_loop(loop)
+            client.gui.close_window()
+        sys.exit(exit_status)
     finally:
         file.close()

@@ -29,9 +29,19 @@ PYZTypeEXE: TypeAlias = "abc.Iterable[_TOCTuple] | PYZ | Splash"
 # Simple configuration
 upx: bool = False  # Use UPX compression (reduces file size, may increase AV detections)
 console: bool = False  # True if you'd want to add a console window (useful for debugging)
-one_dir: bool = False  # True for one-dir, False for one-file
+one_dir: bool = sys.platform == "darwin"  # macOS bundles should not self-extract on launch
 optimize: int | None = None  # -1/None/0=none, 1=remove asserts, 2=also remove docstrings
 app_name: str = "Kick Drops Miner"
+
+bundle_icon = "icons/pickaxe.ico"
+if sys.platform == "darwin":
+    from PIL import Image
+
+    bundle_icon_path = Path("build/macos/pickaxe.icns")
+    bundle_icon_path.parent.mkdir(parents=True, exist_ok=True)
+    with Image.open("icons/pickaxe.ico") as source_icon:
+        source_icon.save(bundle_icon_path, format="ICNS")
+    bundle_icon = str(bundle_icon_path)
 
 
 # (source_path, dest_path, required)
@@ -128,7 +138,7 @@ try:
         console=console,
         optimize=optimize,
         exclude_binaries=one_dir,
-        icon="icons/pickaxe.ico",
+        icon=bundle_icon,
     )
 except PermissionError as exc:
     exc_text: str = format_exc()
@@ -149,6 +159,12 @@ if sys.platform == "darwin":
     app = BUNDLE(
         source,
         name=f'{app_name}.app',
-        icon="icons/pickaxe.ico",
+        icon=bundle_icon,
         bundle_identifier='com.kickdrops.miner',
+        info_plist={
+            "CFBundleDisplayName": app_name,
+            "CFBundleName": app_name,
+            "LSMinimumSystemVersion": "11.0",
+            "NSHighResolutionCapable": True,
+        },
     )

@@ -16,7 +16,7 @@ from tkinter.font import Font, nametofont
 from functools import partial, cached_property
 from datetime import datetime, timedelta, timezone
 from tkinter import Tk, ttk, StringVar, DoubleVar, IntVar, filedialog
-from typing import Any, Union, Tuple, TypedDict, NoReturn, Generic, TYPE_CHECKING
+from typing import Any, Union, Tuple, TypedDict, Generic, TYPE_CHECKING
 
 import pystray
 from yarl import URL
@@ -27,9 +27,6 @@ if sys.platform == "win32":
     import win32api
     import win32con
     import win32gui
-
-if sys.platform == "darwin":
-    import AppKit
 
 from translate import _
 from diagnostics import configure_verbose_logging
@@ -1094,7 +1091,9 @@ class TrayIcon:
         return ''.join(title_parts)
 
     def _start(self):
-        loop = asyncio.get_running_loop()
+        loop = self._manager._loop
+        if loop is None:
+            raise RuntimeError("GUI event loop is not running")
         drop = self._manager.progress._drop
 
         # we need this because tray icon lives in a separate thread
@@ -2136,7 +2135,9 @@ class HelpTab:
 class GUIManager:
     def __init__(self, kick: Kick):
         self._kick: Kick = kick
-        self._poll_task: asyncio.Task[NoReturn] | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._running = False
+        self._window_closed = False
         self._close_requested = asyncio.Event()
         self._root = root = Tk(className=WINDOW_TITLE)
         # withdraw immediately to prevent the window from flashing
@@ -2293,7 +2294,7 @@ class GUIManager:
 
     @property
     def running(self) -> bool:
-        return self._poll_task is not None
+        return self._running
 
     @property
     def close_requested(self) -> bool:
@@ -2319,32 +2320,13 @@ class GUIManager:
         self._close_requested.clear()
 
     def start(self):
-        if self._poll_task is None:
-            self._poll_task = asyncio.create_task(self._poll())
+        self._loop = asyncio.get_running_loop()
+        self._running = True
         # self.progress.start_timer()
 
     def stop(self):
         self.progress.stop_timer()
-        if self._poll_task is not None:
-            self._poll_task.cancel()
-            self._poll_task = None
-
-    async def _poll(self):
-        """
-        This runs the Tkinter event loop via asyncio instead of calling mainloop.
-        0.05s gives similar performance and CPU usage.
-        Not ideal, but the simplest way to avoid threads, thread safety,
-        loop.call_soon_threadsafe, futures and all of that.
-        """
-        update = self._root.update
-        while True:
-            try:
-                update()
-            except tk.TclError:
-                # root has been destroyed
-                break
-            await asyncio.sleep(0.05)
-        self._poll_task = None
+        self._running = False
 
     def close(self, *args) -> int:
         """
@@ -2360,6 +2342,9 @@ class GUIManager:
         """
         Closes the window. Invalidates the logger.
         """
+        if self._window_closed:
+            return
+        self._window_closed = True
         self.tray.stop()
         logging.getLogger("KickDrops").removeHandler(self._handler)
         self._root.destroy()
@@ -2456,15 +2441,6 @@ class GUIManager:
             border = "#cccccc"
             muted = "#404040"
             accent = "#0a84ff"
-
-        # Setting theme for macOS
-        if sys.platform == "darwin":
-            app = AppKit.NSApplication.sharedApplication()
-            if dark:
-                appearance = AppKit.NSAppearance.appearanceNamed_(AppKit.NSAppearanceNameDarkAqua)
-            else:
-                appearance = AppKit.NSAppearance.appearanceNamed_(AppKit.NSAppearanceNameAqua)
-            app.setAppearance_(appearance)
 
         s = self._style
         # Fonts
@@ -2743,7 +2719,7 @@ if __name__ == "__main__":
         mock.campaign.drops = mock.campaign.timed_drops.values()
         return mock
 
-    async def main(exit_event: asyncio.Event):
+    async def main(gui_ready: asyncio.Future[GUIManager]):
         # Initialize GUI debug
         mock = SimpleNamespace(
             settings=SimpleNamespace(
@@ -2769,10 +2745,10 @@ if __name__ == "__main__":
         # _.set_language("Русский")
         gui = GUIManager(mock)  # type: ignore
         mock.gui = gui
-        mock.close = gui.stop
+        main_task = asyncio.current_task()
+        mock.close = lambda: main_task.cancel() if main_task is not None else None
         gui.start()
-        assert gui._poll_task is not None
-        gui._poll_task.add_done_callback(lambda t: exit_event.set())
+        gui_ready.set_result(gui)
         # Login form
         gui.login.update("Login required", None)
         # Game selector and settings panel games
@@ -2875,15 +2851,25 @@ if __name__ == "__main__":
         gui.inv.update_drop(drop)
         gui.display_drop(drop)
 
-    def main_exit(task: asyncio.Task[None]) -> None:
-        if task.exception() is not None:
-            exit_event.set()
-
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    exit_event = asyncio.Event()
-    main_task = loop.create_task(main(exit_event))
-    main_task.add_done_callback(main_exit)
-    loop.run_until_complete(exit_event.wait())
-    if main_task.done():
-        loop.run_until_complete(main_task)
+    gui_ready = loop.create_future()
+
+    async def debug_main() -> int:
+        try:
+            await main(gui_ready)
+        except asyncio.CancelledError:
+            pass
+        return 0
+
+    main_task = loop.create_task(debug_main())
+    loop.run_until_complete(gui_ready)
+    from event_loop import AsyncTkBridge
+
+    gui = gui_ready.result()
+    try:
+        AsyncTkBridge(gui._root, loop, main_task).run()
+    finally:
+        gui.stop()
+        gui.close_window()
+        loop.close()
