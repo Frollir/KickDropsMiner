@@ -25,7 +25,7 @@ switches channels when needed, and claims completed rewards.
 Kick Drops Miner does not ask for your Kick password. It imports an authenticated browser session:
 
 1. Log in to [Kick.com](https://kick.com) in your browser.
-2. Use a local cookies exporter to export cookies for `kick.com` in Netscape `cookies.txt` format.
+2. Use a local cookies exporter ([chrome](https://chromewebstore.google.com/detail/cclelndahbckbenkjhflpdbgdldlbecc?) / [firefox](https://addons.mozilla.org/en-US/firefox/addon/get-cookies-txt-locally/) extension) to export cookies for `kick.com` in Netscape `cookies.txt` format.
 3. Start Kick Drops Miner and press **Import cookies.txt**.
 4. Select the exported file.
 
